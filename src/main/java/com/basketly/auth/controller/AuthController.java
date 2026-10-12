@@ -27,26 +27,36 @@ public class AuthController {
     private static final String REFRESH_COOKIE_NAME = "basketly_refresh_token";
     private final AuthService authService;
 
-    private void setRefreshCookie(HttpServletResponse response, String refreshToken) {
-        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
+    private void setRefreshCookie(HttpServletResponse response, String refreshToken, HttpServletRequest request) {
+        boolean isHttps = request != null && (request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto")));
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
-                .secure(false) // Set to true in prod with HTTPS
-                .sameSite("Lax")
                 .path("/api/v1/auth")
-                .maxAge(7 * 24 * 60 * 60)
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                .maxAge(7 * 24 * 60 * 60);
+
+        if (isHttps) {
+            builder.secure(true).sameSite("None");
+        } else {
+            builder.secure(false).sameSite("Lax");
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 
-    private void clearRefreshCookie(HttpServletResponse response) {
-        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+    private void clearRefreshCookie(HttpServletResponse response, HttpServletRequest request) {
+        boolean isHttps = request != null && (request.isSecure() || "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto")));
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(false)
-                .sameSite("Lax")
                 .path("/api/v1/auth")
-                .maxAge(0)
-                .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+                .maxAge(0);
+
+        if (isHttps) {
+            builder.secure(true).sameSite("None");
+        } else {
+            builder.secure(false).sameSite("Lax");
+        }
+
+        response.addHeader(HttpHeaders.SET_COOKIE, builder.build().toString());
     }
 
     private String extractRefreshCookie(HttpServletRequest request) {
@@ -63,9 +73,10 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(
             @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
         AuthService.AuthResult result = authService.register(request);
-        setRefreshCookie(response, result.rawRefreshToken());
+        setRefreshCookie(response, result.rawRefreshToken(), httpRequest);
         AuthResponse authResponse = AuthResponse.builder()
                 .accessToken(result.accessToken())
                 .user(result.user())
@@ -76,9 +87,10 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(
             @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
         AuthService.AuthResult result = authService.login(request);
-        setRefreshCookie(response, result.rawRefreshToken());
+        setRefreshCookie(response, result.rawRefreshToken(), httpRequest);
         AuthResponse authResponse = AuthResponse.builder()
                 .accessToken(result.accessToken())
                 .user(result.user())
@@ -92,7 +104,7 @@ public class AuthController {
             HttpServletResponse response) {
         String rawRefreshToken = extractRefreshCookie(request);
         AuthService.AuthResult result = authService.refresh(rawRefreshToken);
-        setRefreshCookie(response, result.rawRefreshToken());
+        setRefreshCookie(response, result.rawRefreshToken(), request);
         AuthResponse authResponse = AuthResponse.builder()
                 .accessToken(result.accessToken())
                 .user(result.user())
@@ -106,7 +118,7 @@ public class AuthController {
             HttpServletResponse response) {
         String rawRefreshToken = extractRefreshCookie(request);
         authService.logout(rawRefreshToken);
-        clearRefreshCookie(response);
+        clearRefreshCookie(response, request);
         return ResponseEntity.ok(ApiResponse.ok("Logged out successfully", null));
     }
 
