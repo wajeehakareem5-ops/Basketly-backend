@@ -1,0 +1,5 @@
+com\basketly\auth\AuthServiceTest.class
+com\basketly\planner\PlannerCalculationTest.class
+com\basketly\order\OrderServiceTest.class
+com\basketly\cart\CartCalculationTest.class
+com\basketly\delivery\DeliveryServiceTest.class
